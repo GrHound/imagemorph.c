@@ -1,0 +1,19 @@
+#!/bin/bash
+img="$1"
+#
+# Use ImageMagic convert to get a netpbm .ppm color file
+#
+convert $img in.ppm
+#
+# Apply imagemorph a few times to see the resuls (in out<nnn>.ppm files)
+#
+let i=1
+while [ $i -le 100 ]
+do
+   j=$(printf %03d $i)
+   echo $j
+   imagemorph $2 $3 < in.ppm > out$j.ppm
+#  eog out.ppm
+   let i=i+1
+done
+echo "Look in image files: out*.ppm"
