@@ -20,6 +20,8 @@ Please cite:
 
 ## Usage:
 
+First compile with `make imagemorph`.
+
 For .ppm (P6 raw binary) images:
 
 `imagemorph  [displacement] [smoothing radius] < input.ppm > random-morph.ppm`
