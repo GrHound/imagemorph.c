@@ -21,9 +21,11 @@ Please cite:
 ## Usage:
 
 For .ppm (P6 raw binary) images:
+
 `imagemorph  [displacement] [smoothing radius] < input.ppm > random-morph.ppm`
 
-For .pgm (P5 raw binary) images: 
+For .pgm (P5 raw binary) images:
+
 `imagemorph  [displacement] [smoothing radius] < input.ppm > random-morph.ppm`
 
 Parameters are real values
