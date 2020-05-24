@@ -32,8 +32,11 @@ Parameters are real values
 
 ### Example
 Input:
+
 ![input](sample-input.png)
+
 Output:
+
 ![output](sample-output.png)
 
 PS Please note that for an even more realistic augmentation
