@@ -7,6 +7,7 @@
 
 	Original Author: Marius Bulacu (.pgm version for characters)
 	Adapted for .ppm and color: Lambert Schomaker
+    Adapted for .pgm and .ppm: Nick Ubels
 	
 Please cite:
 
@@ -16,7 +17,7 @@ large single-writer historical collection,
 10th International Conference on Document Analysis and Recognition, 
 pp. 808-812, DOI: 10.1109/ICDAR.2009.8 
 
-Copyright M.Bulacu and L.Schomaker 2009,2016
+Copyright M.Bulacu, L.Schomaker and N.Ubels 2009,2019,2020
 
 */
 
@@ -34,9 +35,8 @@ typedef struct {
 } Pixel;
 
 
-// Reads a gray-scale image in RAW PPM format from stdin
-Pixel ** read_ppm_stdin( int * h, int * w )
-{
+// Reads an image from stdin
+Pixel ** read_image_stdin(int * h, int * w, int * is_colour ) {
 	Pixel ** image;
 	char buf[1024];
 	char c;
@@ -45,15 +45,20 @@ Pixel ** read_ppm_stdin( int * h, int * w )
 
 	// Read the PGM header and check it
 	fscanf(stdin, "%s\n", buf);
-	if ( strcmp(buf, "P6") != 0 )
-	{
-		fprintf(stderr, "\n! Error: The input is not in RAW PPM format (P6).\n");
-		exit( 1 );
-	}
+	if( strcmp(buf, "P6") == 0) {
+	    // Image is in colour PPM
+        *is_colour = 1;
+    }
+	else if( strcmp(buf, "P5") == 0) {
+        // Image is in greyscale PGM
+        *is_colour = 0;
+    } else {
+        fprintf(stderr, "\n! Error: The input is not in RAW PPM/PGM format (P6/P5).\n");
+        exit(1);
+    }
 
 	// Read the comment lines
-	while( (c = fgetc(stdin)) == '#' )
-	{
+	while( (c = fgetc(stdin)) == '#' ) {
 		fgets(buf, 1023, stdin);
 	}
 	ungetc(c, stdin);
@@ -66,19 +71,20 @@ Pixel ** read_ppm_stdin( int * h, int * w )
 
 	// Allocate the image
 	image = (Pixel **) malloc( (*h) * sizeof(Pixel *) );
-	for ( i = 0; i < (*h); i ++ )
-	{
+	for ( i = 0; i < (*h); i ++ ) {
 		image[i] = (Pixel *) malloc( (*w) * sizeof(Pixel) );
 	}
 
 	// Read the pixel values
-	for ( i = 0; i < (*h); i ++ )
-	{
-		for ( j = 0; j < (*w); j ++ )
-		{
-			image[i][j].r = fgetc( stdin );
+	for ( i = 0; i < (*h); i ++ ) {
+		for ( j = 0; j < (*w); j ++ ) {
+		    if (*is_colour == 1) {
+                image[i][j].r = fgetc(stdin);
+            }
 			image[i][j].g = fgetc( stdin );
-			image[i][j].b = fgetc( stdin );
+		    if (*is_colour == 1) {
+                image[i][j].b = fgetc( stdin );
+		    }
 		}
 	}
 
@@ -86,25 +92,30 @@ Pixel ** read_ppm_stdin( int * h, int * w )
 }
 
 
-// Writes a RGB image in RAW PPM format to stdout
-void write_ppm_stdout( Pixel ** image, const int h, const int w )
-{
+// Writes an image to stdout
+void write_image_stdout( Pixel ** image, const int h, const int w, const int is_colour) {
 	int i, j;
 
 	// Write the PGM file header
-	fprintf(stdout, "P6\n");
+	if(is_colour == 1){
+        fprintf(stdout, "P6\n");
+	} else{
+        fprintf(stdout, "P5\n");
+	}
 	fprintf(stdout, "# CREATOR: imagemorph.\n");
 	fprintf(stdout, "%i %i\n", w, h);
 	fprintf(stdout, "255\n");
 
 	// Write the pixel data
-	for ( i = 0; i < h; i ++ )
-	{
-		for ( j = 0; j < w; j ++ )
-		{
-			fputc((int) image[i][j].r, stdout);
-			fputc((int) image[i][j].g, stdout);
-			fputc((int) image[i][j].b, stdout);
+	for ( i = 0; i < h; i ++ ) {
+		for ( j = 0; j < w; j ++ ) {
+            if (is_colour == 1) {
+                fputc((int) image[i][j].r, stdout);
+            }
+            fputc((int) image[i][j].g, stdout);
+            if (is_colour == 1) {
+                fputc((int) image[i][j].b, stdout);
+            }
 		}
 	}
 
@@ -117,8 +128,7 @@ void write_ppm_stdout( Pixel ** image, const int h, const int w )
 
 // Computes the horizontal and vertical displacement fields
 void compute_displacement_field( float ** d_x, float ** d_y, const int h, const int w,
-				 const float amp, const float sigma )
-{
+				 const float amp, const float sigma ) {
 	float ** da_x;
 	float ** da_y;
 
@@ -135,8 +145,7 @@ void compute_displacement_field( float ** d_x, float ** d_y, const int h, const 
 	// Allocate the auxiliary displacement fields
 	da_x = (float **) malloc( h * sizeof(float *) );
 	da_y = (float **) malloc( h * sizeof(float *) );
-	for( i = 0; i < h; i ++ )
-	{
+	for( i = 0; i < h; i ++ ) {
 		da_x[i] = (float *) malloc( w * sizeof(float) );
 		da_y[i] = (float *) malloc( w * sizeof(float) );
 	}
@@ -144,38 +153,30 @@ void compute_displacement_field( float ** d_x, float ** d_y, const int h, const 
 	// Allocate and prepare the gaussian smoothing kernel
 	kws = (int)( 2.0 * sigma );
 	ker = (float *) malloc( (kws + 1) * sizeof(float) );
-	for( k = 0; k <= kws; k ++ )
-	{
+	for( k = 0; k <= kws; k ++ ) {
 		ker[k] = exp( - (float)(k * k) / (sigma * sigma) );
 	}
 
 	// Generate the initial random displacement field
-	for( i = 0; i < h; i ++ )
-	{
-		for( j = 0; j < w; j ++ )
-		{
+	for( i = 0; i < h; i ++ ) {
+		for( j = 0; j < w; j ++ ) {
 			d_x[i][j] = - 1.0 + 2.0 * drand48( );
 			d_y[i][j] = - 1.0 + 2.0 * drand48( );
 		}
 	}
 
 	// Smooth the random displacement field using the gaussian kernel
-	for( i = 0; i < h; i ++ )
-	{
-		for( j = 0; j < w; j ++ )
-		{
+	for( i = 0; i < h; i ++ ) {
+		for( j = 0; j < w; j ++ ) {
 			sum_x = 0.0;
 			sum_y = 0.0;
-			for( k = - kws; k <= kws; k ++ )
-			{
+			for( k = - kws; k <= kws; k ++ ) {
 				v = j + k;
 
-				if ( v < 0 )
-				{
+				if ( v < 0 ) {
 					v = - v;
 				}
-				if ( v >= w )
-				{
+				if ( v >= w ) {
 					v = 2 * w - v - 1;
 				}
 
@@ -187,22 +188,17 @@ void compute_displacement_field( float ** d_x, float ** d_y, const int h, const 
 			da_y[i][j] = sum_y;
 		}
 	}
-	for( j = 0; j < w; j ++ )
-	{
-		for( i = 0; i < h; i ++ )
-		{
+	for( j = 0; j < w; j ++ ) {
+		for( i = 0; i < h; i ++ ) {
 			sum_x = 0.0;
 			sum_y = 0.0;
-			for( k = - kws; k <= kws; k ++ )
-			{
+			for( k = - kws; k <= kws; k ++ ) {
 				u = i + k;
 
-				if ( u < 0 )
-				{
+				if ( u < 0 ) {
 					u = - u;
 				}
-				if ( u >= h )
-				{
+				if ( u >= h ) {
 					u = 2 * h - u - 1;
 				}
 
@@ -217,26 +213,21 @@ void compute_displacement_field( float ** d_x, float ** d_y, const int h, const 
 
 	// Normalize the field
 	avg = 0.0;
-	for( i = 0; i < h; i ++ )
-	{
-		for( j = 0; j < w; j ++ )
-		{
+	for( i = 0; i < h; i ++ ) {
+		for( j = 0; j < w; j ++ ) {
 			avg += sqrt( d_x[i][j] * d_x[i][j] + d_y[i][j] * d_y[i][j] );
 		}
 	}
 	avg /= ( h * w );
-	for( i = 0; i < h; i ++ )
-	{
-		for( j = 0; j < w; j ++ )
-		{
+	for( i = 0; i < h; i ++ ) {
+		for( j = 0; j < w; j ++ ) {
 			d_x[i][j] = amp * d_x[i][j] / avg;
 			d_y[i][j] = amp * d_y[i][j] / avg;
 		}
 	}
 
 	// Garbage collection
-	for( i = 0; i < h; i ++ )
-	{
+	for( i = 0; i < h; i ++ ) {
 		free( da_x[i] );
 		free( da_y[i] );
 	}
@@ -247,9 +238,8 @@ void compute_displacement_field( float ** d_x, float ** d_y, const int h, const 
 
 
 // Applies the displacement field to an image: bilinear interpolation is used
-void apply_displacement_field(Pixel ** input, Pixel ** output, const int h, const int w,
-			       float ** d_x, float ** d_y )
-{
+void apply_displacement_field(Pixel ** input, Pixel ** output, const int h, const int w, const int is_colour,
+			       float ** d_x, float ** d_y ) {
 	int i, j;
 	int idx;
 	int u = 0, v = 0;
@@ -263,10 +253,8 @@ void apply_displacement_field(Pixel ** input, Pixel ** output, const int h, cons
 
 
 	// Bilinear interpolation
-	for( i = 0; i < h; i ++ )
-	{
-		for( j = 0; j < w; j ++ )
-		{
+	for( i = 0; i < h; i ++ ) {
+		for( j = 0; j < w; j ++ ) {
 			p1 = i + d_y[i][j];
 			p2 = j + d_x[i][j];
 
@@ -279,10 +267,8 @@ void apply_displacement_field(Pixel ** input, Pixel ** output, const int h, cons
 			sumr = 0.0;
 			sumg = 0.0;
 			sumb = 0.0;
-			for( idx = 0; idx < 4; idx ++ )
-			{
-				switch( idx )
-				{
+			for( idx = 0; idx < 4; idx ++ ) {
+				switch( idx ) {
 					case 0:	u = u0;
 						v = v0;
 						f = (1.0 - f1) * (1.0 - f2);
@@ -306,19 +292,21 @@ void apply_displacement_field(Pixel ** input, Pixel ** output, const int h, cons
 				if ( v < 0 )  v = 0;
 				if ( v >= w ) v = w - 1;
 
-				val = input[u][v].r;
-				sumr += f * val;
-
+				if( is_colour == 1) {
+                    val = input[u][v].r;
+                    sumr += f * val;
+                    val = input[u][v].b;
+                    sumb += f * val;
+                }
 				val = input[u][v].g;
 				sumg += f * val;
-
-				val = input[u][v].b;
-				sumb += f * val;
 			}
 
-			output[i][j].r = (unsigned char) sumr;
-			output[i][j].g = (unsigned char) sumg;
-			output[i][j].b = (unsigned char) sumb;
+            if( is_colour == 1) {
+                output[i][j].r = (unsigned char) sumr;
+                output[i][j].b = (unsigned char) sumb;
+            }
+            output[i][j].g = (unsigned char) sumg;
 		}
 	}
 }
@@ -327,9 +315,8 @@ void apply_displacement_field(Pixel ** input, Pixel ** output, const int h, cons
 // Rubbersheet transform on a gray-scale image
 // amp   = the amplitude of the deformation
 // sigma = the local image area affected (the spread of the gaussian smoothing kernel)
-void rubbersheet( Pixel ** input, Pixel ** output, const int h, const int w,
-		  const float amp, const float sigma )
-{
+void rubbersheet( Pixel ** input, Pixel ** output, const int h, const int w, const int is_colour,
+		  const float amp, const float sigma ) {
 	float ** d_x;
 	float ** d_y;
 
@@ -337,15 +324,13 @@ void rubbersheet( Pixel ** input, Pixel ** output, const int h, const int w,
 
 
 	// Check that 'sigma' is not too large
-	if( (sigma > h / 2.5) || (sigma > w / 2.5) )
-	{
+	if( (sigma > h / 2.5) || (sigma > w / 2.5) ) {
 		fprintf( stderr, "- Warning: Gaussian smoothing kernel too large for the input image.\n" );
 		return;
 	}
 
 	// Check that 'sigma' is not negative
-	if( sigma < 1E-5 )
-	{
+	if( sigma < 1E-5 ) {
 		fprintf( stderr, "- Warning: Gaussian smoothing kernel with negative/zero spread.\n" );
 		return;
 	}
@@ -353,8 +338,7 @@ void rubbersheet( Pixel ** input, Pixel ** output, const int h, const int w,
 	// Allocate the displacement fields
 	d_x  = (float **) malloc( h * sizeof(float *) );
 	d_y  = (float **) malloc( h * sizeof(float *) );
-	for( i = 0; i < h; i ++ )
-	{
+	for( i = 0; i < h; i ++ ) {
 		d_x[i]  = (float *) malloc( w * sizeof(float) );
 		d_y[i]  = (float *) malloc( w * sizeof(float) );
 	}
@@ -363,11 +347,10 @@ void rubbersheet( Pixel ** input, Pixel ** output, const int h, const int w,
 	compute_displacement_field( d_x, d_y, h, w, amp, sigma );
 
 	// Apply the displacement fields
-	apply_displacement_field( input, output, h, w, d_x, d_y );
+	apply_displacement_field( input, output, h, w, is_colour, d_x, d_y );
 
 	// Garbage collection
-	for( i = 0; i < h; i ++ )
-	{
+	for( i = 0; i < h; i ++ ) {
 		free( d_x[i] );
 		free( d_y[i] );
 	}
@@ -376,8 +359,7 @@ void rubbersheet( Pixel ** input, Pixel ** output, const int h, const int w,
 }
 
 
-int main( int argc, char ** argv )
-{
+int main( int argc, char ** argv ) {
 	int h, w;
 	Pixel ** input;
 	Pixel ** output;
@@ -386,14 +368,15 @@ int main( int argc, char ** argv )
 	float sigma;
 	int i;
 
+	int is_colour;
+
 
 // Seed the random number generator
 	srand48( (unsigned int)getpid( ) + (unsigned int) time( NULL ) );
 
 // Process the command line arguments
-	if ( argc != 3 )
-	{
-		fprintf( stderr, "Program usage: cat [pgm image] | %s [displacement] [smoothing radius].\n", argv[0] );
+	if ( argc != 3 ) {
+		fprintf( stderr, "Program usage: cat [ppm/pgm image] | %s [displacement] [smoothing radius].\n", argv[0] );
 		fprintf( stderr, "The morphed image is written to stdout.\n" );
 		exit(1);
 	}
@@ -401,24 +384,22 @@ int main( int argc, char ** argv )
 	sigma = atof( argv[2] );
 
 // Read in the input image
-	input = read_ppm_stdin( &h, &w );
+	input = read_image_stdin( &h, &w, &is_colour );
 
 // Allocate the output image
 	output = (Pixel **) malloc( h * sizeof(Pixel *) );
-	for ( i = 0; i < h; i ++ )
-	{
+	for ( i = 0; i < h; i ++ ) {
 		output[i] = (Pixel *) malloc( w * sizeof(Pixel) );
 	}
 
 // Morph the image
-	rubbersheet( input, output, h, w, amp, sigma );
+	rubbersheet( input, output, h, w, is_colour, amp, sigma );
 
 // Write the morphed image to stdout
-	write_ppm_stdout( output, h, w );
+	write_image_stdout( output, h, w, is_colour );
 
 // Garbage collection
-	for ( i = 0; i < h; i ++ )
-	{
+	for ( i = 0; i < h; i ++ ) {
 		free( input[i] );
 		free( output[i] );
 	}
