@@ -8,3 +8,5 @@ Recognition of handwritten numerical fields in a
 large single-writer historical collection,
 10th International Conference on Document Analysis and Recognition, 
 pp. 808-812, DOI: 10.1109/ICDAR.2009.8 
+
+December 2023 - Added imagemorph.py, thanks to ChatGPT and Jelmer van Lune
